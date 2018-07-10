@@ -27,8 +27,12 @@ nginx.conf
 events {}
 
 http {
+
     lua_shm  test 1M;
+    
+    # /usr/local/nginx/conf/http.lua
     lua_include  http.lua;
+    
     lua_set $foo  foo;
 
     server {
