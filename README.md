@@ -15,8 +15,8 @@ Configuring nginx with the module.
 
     $ ./configure --add-module=/path/to/nginx-http-lua-module
 
-Examples
-========
+Example
+=======
 
 nginx.conf
 ```
