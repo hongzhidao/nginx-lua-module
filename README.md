@@ -11,7 +11,7 @@ Compatibility
 Build
 =====
 
-Configuring nginx with the module::
+Configuring nginx with the module.
 
     $ ./configure --add-module=/path/to/nginx-http-lua-module
 
