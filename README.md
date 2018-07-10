@@ -14,6 +14,37 @@ Build
 Configuring nginx with the module.
 
     $ ./configure --add-module=/path/to/nginx-http-lua-module
+    
+Directives
+==========
+
+- ``lua_shm`` (http)
+- ``lua_include`` (http)
+- ``lua_set`` (http)
+- ``lua_access`` (http|server|location)
+- ``lua_content`` (http|server|location)
+
+Apis
+====
+- ``ngx.method``
+- ``ngx.uri``
+- ``ngx.http_version``
+- ``ngx.remote_addr``
+- ``ngx.status``
+- ``ngx.arg{}``
+- ``ngx.header{}``
+- ``ngx.headers{}``
+- ``ngx.var{}``
+- ``ngx.log(msg)``
+- ``ngx.warn(msg)``
+- ``ngx.error(msg)``
+- ``ngx.finish(status, desc``)
+- ``ngx.shm.x:set(k, ...)``
+- ``ngx.shm.x:get(k, ...)``
+- ``ngx.shm.x:del(k, ...)``
+- ``ngx.shm.x:has(k, ...)``
+- ``ngx.shm.x:keys(k, ...)``
+
 
 Example
 =======
