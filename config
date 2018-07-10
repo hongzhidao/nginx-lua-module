@@ -1,0 +1,20 @@
+ngx_addon_name="ngx_http_lua_module"
+
+lua=$ngx_addon_dir/lua-5.4.0-work2
+
+ngx_module_type=HTTP
+ngx_module_name=ngx_http_lua_module
+
+ngx_module_incs="$lua/src $ngx_addon_dir/src"
+ngx_module_libs="$lua/src/liblua.a -lm -ldl"
+
+ngx_module_deps="$lua/src/liblua.a \
+                 $ngx_addon_dir/src/ngx_http_lua.h"
+
+ngx_module_srcs="$ngx_addon_dir/src/ngx_http_lua.c \
+                 $ngx_addon_dir/src/ngx_http_lua_module.c \
+                 $ngx_addon_dir/src/ngx_http_lua_shm.c \
+                 $ngx_addon_dir/src/ngx_http_lua_shm_table.c \
+                 $ngx_addon_dir/src/ngx_http_lua_request.c"
+
+. auto/module

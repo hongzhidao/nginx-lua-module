@@ -1,0 +1,469 @@
+
+/*
+ * Copyright (C) Jedo Hong
+ */
+
+
+#include <ngx_http_lua.h>
+
+
+static void ngx_http_lua_content_event_handler(ngx_http_request_t *r);
+static ngx_int_t ngx_http_lua_variable(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data);
+
+static ngx_int_t ngx_http_lua_init(ngx_conf_t *cf);
+static void *ngx_http_lua_create_main_conf(ngx_conf_t *cf);
+static char *ngx_http_lua_init_main_conf(ngx_conf_t *cf, void *conf);
+static void *ngx_http_lua_create_loc_conf(ngx_conf_t *cf);
+static char *ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent,
+    void *child);
+
+static char *ngx_http_lua_shm(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char *ngx_http_lua_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char *ngx_http_lua_content(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
+
+
+static ngx_command_t  ngx_http_lua_commands[] = {
+
+    { ngx_string("lua_include"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_MAIN_CONF_OFFSET,
+      offsetof(ngx_http_lua_main_conf_t, file),
+      NULL },
+
+    { ngx_string("lua_shm"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE2,
+      ngx_http_lua_shm,
+      0,
+      0,
+      NULL },
+
+    { ngx_string("lua_set"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE2,
+      ngx_http_lua_set,
+      0,
+      0,
+      NULL },
+
+    { ngx_string("lua_access"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_lua_loc_conf_t, access),
+      NULL },
+
+    { ngx_string("lua_content"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_lua_content,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+    ngx_null_command
+};
+
+
+static ngx_http_module_t  ngx_http_lua_module_ctx = {
+    NULL,                          /* preconfiguration */
+    ngx_http_lua_init,             /* postconfiguration */
+
+    ngx_http_lua_create_main_conf, /* create main configuration */
+    ngx_http_lua_init_main_conf,   /* init main configuration */
+
+    NULL,                          /* create server configuration */
+    NULL,                          /* merge server configuration */
+
+    ngx_http_lua_create_loc_conf,  /* create location configuration */
+    ngx_http_lua_merge_loc_conf    /* merge location configuration */
+};
+
+
+ngx_module_t  ngx_http_lua_module = {
+    NGX_MODULE_V1,
+    &ngx_http_lua_module_ctx,      /* module context */
+    ngx_http_lua_commands,         /* module directives */
+    NGX_HTTP_MODULE,               /* module type */
+    NULL,                          /* init master */
+    NULL,                          /* init module */
+    NULL,                          /* init process */
+    NULL,                          /* init thread */
+    NULL,                          /* exit thread */
+    NULL,                          /* exit process */
+    NULL,                          /* exit master */
+    NGX_MODULE_V1_PADDING
+};
+
+
+static ngx_int_t
+ngx_http_lua_access_handler(ngx_http_request_t *r)
+{
+    ngx_int_t                     rc;
+    ngx_http_lua_loc_conf_t      *llcf;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua access handler");
+
+    llcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
+
+    if (llcf->access.len == 0) {
+        return NGX_DECLINED;
+    }
+
+    rc = ngx_http_lua_resume(r, &llcf->access, r->connection->write);
+
+    if (rc == NGX_OK && r->header_sent) {
+        return NGX_HTTP_OK;
+    }
+
+    /* NGX_OK, NGX_AGAIN, NGX_DECLINED, NGX_ERROR */
+
+    return rc;
+}
+
+
+static ngx_int_t
+ngx_http_lua_content_handler(ngx_http_request_t *r)
+{
+    ngx_int_t  rc;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua content handler");
+
+    rc = ngx_http_read_client_request_body(r,
+                                           ngx_http_lua_content_event_handler);
+
+    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
+        return rc;
+    }
+
+    return NGX_DONE;
+}
+
+
+static void
+ngx_http_lua_content_event_handler(ngx_http_request_t *r)
+{
+    ngx_int_t                     rc;
+    ngx_http_lua_ctx_t           *ctx;
+    ngx_http_lua_loc_conf_t      *llcf;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua content event handler");
+
+    llcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
+
+    rc = ngx_http_lua_resume(r, &llcf->content, r->connection->write);
+
+    if (rc == NGX_AGAIN) {
+        r->write_event_handler = ngx_http_lua_content_event_handler;
+        return;
+    }
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
+
+    ngx_http_finalize_request(r, ctx->status);
+}
+
+
+static ngx_int_t
+ngx_http_lua_init_zone(ngx_shm_zone_t *shm_zone, void *data)
+{
+    ngx_http_lua_shm_ctx_t  *octx = data;
+
+    size_t                      len;
+    ngx_http_lua_shm_ctx_t      *ctx;
+
+    ctx = shm_zone->data;
+
+    if (octx) {
+        ctx->sh = octx->sh;
+        ctx->shpool = octx->shpool;
+        return NGX_OK;
+    }
+
+    ctx->shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
+
+    if (shm_zone->shm.exists) {
+        ctx->sh = ctx->shpool->data;
+        return NGX_OK;
+    }
+
+    ctx->sh = ngx_slab_alloc(ctx->shpool, sizeof(ngx_http_lua_shm_shctx_t));
+    if (ctx->sh == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx->shpool->data = ctx->sh;
+
+    ngx_rbtree_init(&ctx->sh->rbtree, &ctx->sh->sentinel,
+                    ngx_http_lua_shm_rbtree_insert_value);
+
+    ngx_queue_init(&ctx->sh->queue);
+
+    len = sizeof(" in lua_shm \"\"") + shm_zone->shm.name.len;
+
+    ctx->shpool->log_ctx = ngx_slab_alloc(ctx->shpool, len);
+    if (ctx->shpool->log_ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_sprintf(ctx->shpool->log_ctx, " in lua_shm \"%V\"%Z",
+                &shm_zone->shm.name);
+
+    ctx->shpool->log_nomem = 0;
+
+    return NGX_OK;
+}
+
+
+static char *
+ngx_http_lua_shm(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_lua_main_conf_t  *lmcf = conf;
+
+    ssize_t                     size;
+    ngx_str_t                  *value, name;
+    ngx_shm_zone_t             *zone, **zp;
+    ngx_http_lua_shm_ctx_t     *ctx;
+
+    value = cf->args->elts;
+
+    ctx = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_shm_ctx_t));
+    if (ctx == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    if (value[1].len == 0) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid lua shm zone name \"%V\"", &value[1]);
+        return NGX_CONF_ERROR;
+    }
+
+    name = value[1];
+
+    size = ngx_parse_size(&value[2]);
+
+    if (size <= 8191) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid lua shm zone size \"%V\"", &value[2]);
+        return NGX_CONF_ERROR;
+    }
+
+    zone = ngx_shared_memory_add(cf, &name, size,
+                                 &ngx_http_lua_module);
+    if (zone == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    if (zone->data) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "lua_shm \"%V\" is already defined as "
+                           "\"%V\"", &name, &zone->shm.name);
+        return NGX_CONF_ERROR;
+    }
+
+    zone->init = ngx_http_lua_init_zone;
+    zone->data = ctx;
+
+    zp = ngx_array_push(&lmcf->shm_zones);
+    if (zp == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *zp = zone;
+
+    return NGX_CONF_OK;
+}
+
+
+static ngx_int_t
+ngx_http_lua_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v,
+    uintptr_t data)
+{
+    ngx_str_t  *func = (ngx_str_t *) data;
+
+    ngx_int_t     rc;
+    ngx_str_t     result;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua variable handler");
+
+    rc = ngx_http_lua_eval(r, func, &result);
+    
+    if (rc == NGX_ERROR) {
+        return NGX_ERROR;
+    }
+
+    if (rc == NGX_DECLINED) {
+        v->not_found = 1;
+        return NGX_OK;
+    }
+    
+    v->len = result.len;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = result.data; 
+
+    return NGX_OK;
+}
+
+
+static char *
+ngx_http_lua_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_str_t            *value, *func;
+    ngx_http_variable_t  *v;
+
+    value = cf->args->elts;
+
+    if (value[1].data[0] != '$') {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid variable name \"%V\"", &value[1]);
+        return NGX_CONF_ERROR;
+    }
+
+    value[1].len--;
+    value[1].data++;
+
+    v = ngx_http_add_variable(cf, &value[1], NGX_HTTP_VAR_CHANGEABLE);
+    if (v == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    func = ngx_palloc(cf->pool, sizeof(ngx_str_t));
+    if (func == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *func = value[2];
+
+    v->get_handler = ngx_http_lua_variable;
+    v->data = (uintptr_t) func;
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
+ngx_http_lua_content(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_lua_loc_conf_t *llcf = conf;
+
+    ngx_str_t                 *value;
+    ngx_http_core_loc_conf_t  *clcf;
+
+    if (llcf->content.data) {
+        return "is duplicate";
+    }
+
+    value = cf->args->elts;
+    llcf->content = value[1];
+
+    clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
+    clcf->handler = ngx_http_lua_content_handler;
+
+    return NGX_CONF_OK;
+}
+
+
+static void *
+ngx_http_lua_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_http_lua_main_conf_t  *conf;
+
+    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_main_conf_t));
+    if (conf == NULL) {
+        return NULL;
+    }
+
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     conf->state = NULL;
+     */
+
+    if (ngx_array_init(&conf->shm_zones, cf->pool, 2,
+                       sizeof(ngx_shm_zone_t *))
+        != NGX_OK)
+    {
+        return NGX_CONF_ERROR;
+    }
+
+    return conf;
+}
+
+
+static char *
+ngx_http_lua_init_main_conf(ngx_conf_t *cf, void *conf)
+{
+    return NGX_CONF_OK;
+}
+
+
+static void *
+ngx_http_lua_create_loc_conf(ngx_conf_t *cf)
+{
+    ngx_http_lua_loc_conf_t  *conf;
+
+    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_loc_conf_t));
+    if (conf == NULL) {
+        return NULL;
+    }
+
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     conf->access = { 0, NULL };
+     *     conf->content = { 0, NULL };
+     */
+
+    return conf;
+}
+
+
+static char *
+ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
+{
+    ngx_http_lua_loc_conf_t  *prev = parent; 
+    ngx_http_lua_loc_conf_t  *conf = child; 
+
+    if (conf->access.data == NULL) {
+        conf->access = prev->access;
+    }
+
+    if (conf->content.data == NULL) {
+        conf->content = prev->content;
+    }
+
+    return NGX_CONF_OK;
+}
+
+
+static ngx_int_t
+ngx_http_lua_init(ngx_conf_t *cf)
+{
+    ngx_int_t                   rc;
+    ngx_http_handler_pt        *h;
+    ngx_http_lua_main_conf_t   *lmcf;
+    ngx_http_core_main_conf_t  *cmcf;
+
+    lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
+    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
+
+    h = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    *h = ngx_http_lua_access_handler;
+
+    rc = ngx_http_lua_init_state(cf, lmcf);
+    if (rc != NGX_OK) {
+        return NGX_ERROR;
+    }
+
+    return NGX_OK;
+}
