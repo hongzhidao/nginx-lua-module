@@ -168,8 +168,15 @@ end
 
 Community
 =========
-All feedback welcome. Thanks.
 
 Author: Jedo Hong 
 
-Email: hongzhidao@gmail.com
+Contact: hongzhidao@gmail.com
+
+All feedback welcome. Thanks.
+
+Inspired From
+-------------
+njs: https://github.com/nginx/njs
+
+python: https://github.com/arut/nginx-python-module
