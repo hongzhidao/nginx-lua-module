@@ -26,14 +26,14 @@ Directives
 
 Apis
 ====
-- ``ngx.method``
-- ``ngx.uri``
-- ``ngx.http_version``
-- ``ngx.remote_addr``
-- ``ngx.status``
-- ``ngx.arg{}``
-- ``ngx.header{}``
-- ``ngx.headers{}``
+- ``ngx.method`` the client HTTP request method, readonly.
+- ``ngx.uri`` the client HTTP request uri, readonly.
+- ``ngx.http_version`` the client HTTP request version, readonly.
+- ``ngx.remote_addr`` the client ip, readonly.
+- ``ngx.status`` the client HTTP response status.
+- ``ngx.arg{}`` the client HTTP request args, readonly.
+- ``ngx.header{}`` the client HTTP request header, readonly.
+- ``ngx.headers{}`` the client HTTP response header.
 - ``ngx.var{}``
 - ``ngx.log(msg)``
 - ``ngx.warn(msg)``
