@@ -35,6 +35,7 @@ ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
     lua_createtable(L, 0, 100);
 
     ngx_http_lua_register_shm(L, lmcf);
+    ngx_http_lua_register_method(L);
     ngx_http_lua_register_request(L);
 
     lua_setglobal(L, "ngx");
@@ -329,22 +330,20 @@ ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name, ngx_str_t *result)
 }
 
 
-ngx_int_t
+int
 ngx_http_lua_yield(ngx_http_request_t *r)
 {
+    lua_State           *L;
     ngx_http_lua_ctx_t  *ctx;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
+    L = ctx->thread;
 
-    if (ctx->wake == NULL) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "blocking calls are not allowed");
-        return NGX_ERROR;
+    if (ctx->wake) {
+        return lua_yield(L, 0);
     }
 
-    lua_yield(ctx->thread, 0);
-
-    return NGX_OK;
+    return luaL_error(L, "blocking calls are not allowed");
 }
 
 

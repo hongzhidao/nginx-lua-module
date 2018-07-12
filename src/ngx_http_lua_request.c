@@ -8,10 +8,7 @@
 #include <ngx_http_lua.h>
 
 
-static int ngx_http_lua_finish(lua_State *L);
-static int ngx_http_lua_log(lua_State *L);
-static int ngx_http_lua_warn(lua_State *L);
-static int ngx_http_lua_error(lua_State *L);
+static int ngx_http_lua_req_remote_addr(lua_State *L);
 static int ngx_http_lua_get_arg(lua_State *L);
 static int ngx_http_lua_get_header_in(lua_State *L);
 static int ngx_http_lua_get_header_out(lua_State *L);
@@ -20,35 +17,14 @@ static int ngx_http_lua_get_variable(lua_State *L);
 static int ngx_http_lua_req_method(lua_State *L);
 static int ngx_http_lua_req_uri(lua_State *L);
 static int ngx_http_lua_req_http_version(lua_State *L);
-static int ngx_http_lua_req_remote_addr(lua_State *L);
+static int ngx_http_lua_req_body(lua_State *L);
 static int ngx_http_lua_get_status(lua_State *L);
 static int ngx_http_lua_set_status(lua_State *L);
-
-
-/*
- * method uri http_version
- * args
- * header
- * headers
- * status
-*/
 
 
 void
 ngx_http_lua_register_request(lua_State *L)
 {
-    lua_pushcfunction(L, ngx_http_lua_finish);
-    lua_setfield(L, -2, "finish");
-
-    lua_pushcfunction(L, ngx_http_lua_log);
-    lua_setfield(L, -2, "log");
-
-    lua_pushcfunction(L, ngx_http_lua_warn);
-    lua_setfield(L, -2, "warn");
-
-    lua_pushcfunction(L, ngx_http_lua_error);
-    lua_setfield(L, -2, "error");
-
     /* args { */
     lua_newtable(L);
 
@@ -98,6 +74,9 @@ ngx_http_lua_register_request(lua_State *L)
     /* __meta { */
     lua_createtable(L, 0, 4);
 
+    lua_pushcfunction(L, ngx_http_lua_req_remote_addr);
+    lua_setfield(L, -2, "remote_addr");
+
     lua_pushcfunction(L, ngx_http_lua_req_method);
     lua_setfield(L, -2, "method");
 
@@ -107,8 +86,8 @@ ngx_http_lua_register_request(lua_State *L)
     lua_pushcfunction(L, ngx_http_lua_req_http_version);
     lua_setfield(L, -2, "http_version");
 
-    lua_pushcfunction(L, ngx_http_lua_req_remote_addr);
-    lua_setfield(L, -2, "remote_addr");
+    lua_pushcfunction(L, ngx_http_lua_req_body);
+    lua_setfield(L, -2, "request_body");
 
     lua_pushcfunction(L, ngx_http_lua_get_status);
     lua_setfield(L, -2, "status");
@@ -137,106 +116,17 @@ ngx_http_lua_register_request(lua_State *L)
 
 
 static int
-ngx_http_lua_finish(lua_State *L)
+ngx_http_lua_req_remote_addr(lua_State *L)
 {
-    int                        n;
-    ngx_str_t                  text;
-    ngx_int_t                  status;
-    ngx_http_request_t        *r;
-    ngx_http_lua_ctx_t        *ctx;
-    ngx_http_complex_value_t   cv;
-
-    r = ngx_http_lua_get_request(L);
-
-    n = lua_gettop(L);
-    if (n < 1) {
-        return luaL_error(L, "too few arguments");
-    }
-
-    status = luaL_checkinteger(L, 1);
-
-    if (status < 0 || status > 999) {
-        return luaL_error(L, "code is out of range");
-    }
-
-    if (n < 2) {
-        text.data = NULL;
-        text.len = 0;
-
-    } else {
-        text.data = (u_char *) luaL_checklstring(L, 2, &text.len);
-    }
-
-    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
-
-    if (status < NGX_HTTP_BAD_REQUEST || text.len) {
-        ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
-
-        cv.value.data = text.data;
-        cv.value.len = text.len;
-
-        ctx->status = ngx_http_send_response(r, status, NULL, &cv);
-
-        if (ctx->status == NGX_ERROR) {
-            return luaL_error(L, "failed to send response");
-        }
-
-    } else {
-        ctx->status = status;
-    }
-
-    return 0;
-}
-
-
-static int
-ngx_http_lua_log_core(lua_State *L, ngx_uint_t level)
-{
-    int                        n;
-    ngx_str_t                  msg;
-    ngx_connection_t          *c;
-    ngx_http_request_t        *r;
-    ngx_log_handler_pt         handler;
+    ngx_connection_t           *c;
+    ngx_http_request_t         *r;
 
     r = ngx_http_lua_get_request(L);
     c = r->connection;
 
-    n = lua_gettop(L);
-    if (n < 1) {
-        return luaL_error(L, "too few arguments");
-    }
+    lua_pushlstring(L, (const char *) c->addr_text.data, c->addr_text.len);
 
-    msg.data = (u_char *) luaL_checklstring(L, 1, &msg.len);
-
-    handler = c->log->handler;
-    c->log->handler = NULL;
-
-    ngx_log_error(level, c->log, 0, "lua: %*s", msg.len, msg.data);
-
-    c->log->handler = handler;
-
-    return 0;
-}
-
-
-static int
-ngx_http_lua_log(lua_State *L)
-{
-    return ngx_http_lua_log_core(L, NGX_LOG_INFO);
-}
-
-
-static int
-ngx_http_lua_warn(lua_State *L)
-{
-    return ngx_http_lua_log_core(L, NGX_LOG_WARN);
-}
-
-
-static int
-ngx_http_lua_error(lua_State *L)
-{
-    return ngx_http_lua_log_core(L, NGX_LOG_ERR);
+    return 1;
 }
 
 
@@ -488,15 +378,60 @@ ngx_http_lua_req_http_version(lua_State *L)
 
 
 static int
-ngx_http_lua_req_remote_addr(lua_State *L)
+ngx_http_lua_req_body(lua_State *L)
 {
-    ngx_connection_t           *c;
+    u_char                     *p;
+    size_t                      len;
+    ngx_buf_t                  *buf;
+    ngx_str_t                   v;
+    ngx_chain_t                *cl;
     ngx_http_request_t         *r;
 
     r = ngx_http_lua_get_request(L);
-    c = r->connection;
 
-    lua_pushlstring(L, (const char *) c->addr_text.data, c->addr_text.len);
+    if (r->request_body == NULL
+        || r->request_body->bufs == NULL
+        || r->request_body->temp_file)
+    {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    cl = r->request_body->bufs;
+    buf = cl->buf;
+
+    if (cl->next == NULL) {
+        v.data = buf->pos;
+        v.len = buf->last - buf->pos;
+        goto found;
+    }
+
+    len = buf->last - buf->pos;
+    cl = cl->next;
+
+    for ( /* void */ ; cl; cl = cl->next) {
+        buf = cl->buf;
+        len += buf->last - buf->pos;
+    }
+
+    p = ngx_pnalloc(r->pool, len);
+    if (p == NULL) {
+        return luaL_error(L, "get request body failed");
+    }
+
+    v.data = p;
+    v.len = len;
+
+    cl = r->request_body->bufs;
+
+    for ( /* void */ ; cl; cl = cl->next) {
+        buf = cl->buf;
+        p = ngx_cpymem(p, buf->pos, buf->last - buf->pos);
+    }
+
+found:
+
+    lua_pushlstring(L, (const char *) v.data, v.len);
 
     return 1;
 }

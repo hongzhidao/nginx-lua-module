@@ -15,6 +15,7 @@ ngx_module_srcs="$ngx_addon_dir/src/ngx_http_lua.c \
                  $ngx_addon_dir/src/ngx_http_lua_module.c \
                  $ngx_addon_dir/src/ngx_http_lua_shm.c \
                  $ngx_addon_dir/src/ngx_http_lua_shm_table.c \
+                 $ngx_addon_dir/src/ngx_http_lua_method.c \
                  $ngx_addon_dir/src/ngx_http_lua_request.c"
 
 . auto/module
