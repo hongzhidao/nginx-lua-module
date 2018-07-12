@@ -34,10 +34,12 @@ Apis
 - ``ngx.arg{}`` the client HTTP request args, readonly.
 - ``ngx.header{}`` the client HTTP request header, readonly.
 - ``ngx.headers{}`` the client HTTP response header.
+- ``ngx.request_body`` the client HTTP request body.
 - ``ngx.var{}``
 - ``ngx.log(msg)``
 - ``ngx.warn(msg)``
 - ``ngx.error(msg)``
+- ``ngx.read_body()`` call this first while use ngx.request_body before content phase. 
 - ``ngx.finish(status, desc``)
 - ``ngx.shm.x:set(k, ...)``
 - ``ngx.shm.x:get(k, ...)``
@@ -93,6 +95,9 @@ function access1()
     shm:set("k1", "k1's val");
     shm:set("k2", "k2's val");
     shm:set("k3", "k3's val");
+    
+    ngx.read_body();
+    local body = ngx.request_body;
 end
 
 
