@@ -26,18 +26,20 @@ Directives
 
 Apis
 ====
-- ``ngx.method``
-- ``ngx.uri``
-- ``ngx.http_version``
-- ``ngx.remote_addr``
-- ``ngx.status``
-- ``ngx.arg{}``
-- ``ngx.header{}``
-- ``ngx.headers{}``
+- ``ngx.method`` the client HTTP request method, readonly.
+- ``ngx.uri`` the client HTTP request uri, readonly.
+- ``ngx.http_version`` the client HTTP request version, readonly.
+- ``ngx.remote_addr`` the client ip, readonly.
+- ``ngx.status`` the client HTTP response status.
+- ``ngx.arg{}`` the client HTTP request args, readonly.
+- ``ngx.header{}`` the client HTTP request header, readonly.
+- ``ngx.headers{}`` the client HTTP response header.
+- ``ngx.request_body`` the client HTTP request body.
 - ``ngx.var{}``
 - ``ngx.log(msg)``
 - ``ngx.warn(msg)``
 - ``ngx.error(msg)``
+- ``ngx.read_body()`` call this first while use ngx.request_body before content phase. 
 - ``ngx.finish(status, desc``)
 - ``ngx.shm.x:set(k, ...)``
 - ``ngx.shm.x:get(k, ...)``
@@ -93,6 +95,9 @@ function access1()
     shm:set("k1", "k1's val");
     shm:set("k2", "k2's val");
     shm:set("k3", "k3's val");
+    
+    ngx.read_body();
+    local body = ngx.request_body;
 end
 
 
@@ -102,6 +107,7 @@ function content1()
     local arg = ngx.arg.x or "arg x";
     local uri = ngx.uri;
     local hi = ngx.header["Accept-Language"] or "header accept language";
+    local body = ngx.request_body or "body";
 
     local k1 = shm:get("k1") or "not";
     local keys = shm:keys();
@@ -114,6 +120,7 @@ function content1()
     local content = "arg: " .. arg .. "<br>"
                     .. "uri: " .. uri .. "<br>"
                     .. "header: " .. hi .. "<br>"
+                    .. "body: " .. body .. "<br>"
                     .. "shm k1: " .. k1 .. "<br>"
                     .. "shm keys: " .. ks .. "<br>"
                     .. "var: " .. var .. "<br>";
