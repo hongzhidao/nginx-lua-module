@@ -107,6 +107,7 @@ function content1()
     local arg = ngx.arg.x or "arg x";
     local uri = ngx.uri;
     local hi = ngx.header["Accept-Language"] or "header accept language";
+    local body = ngx.request_body or "body";
 
     local k1 = shm:get("k1") or "not";
     local keys = shm:keys();
@@ -119,6 +120,7 @@ function content1()
     local content = "arg: " .. arg .. "<br>"
                     .. "uri: " .. uri .. "<br>"
                     .. "header: " .. hi .. "<br>"
+                    .. "body: " .. body .. "<br>"
                     .. "shm k1: " .. k1 .. "<br>"
                     .. "shm keys: " .. ks .. "<br>"
                     .. "var: " .. var .. "<br>";
