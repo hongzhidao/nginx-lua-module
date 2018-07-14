@@ -13,7 +13,9 @@ ngx_http_lua_shm_set_table(ngx_http_request_t *r, lua_State *L,
 {
     ngx_int_t                          rc;
     int                                value_type;
+    u_char                             c;
     u_char                            *p;
+    double                             num;
     uint32_t                           hash;
     ngx_int_t                          size;
     ngx_str_t                          key, value;
@@ -60,6 +62,18 @@ ngx_http_lua_shm_set_table(ngx_http_request_t *r, lua_State *L,
             value.data = (u_char *) lua_tolstring(L, -1, &value.len);
             break;
 
+        case LUA_TNUMBER:
+            num = lua_tonumber(L, -1);
+            value.len = sizeof(double);
+            value.data = (u_char *) &num;
+            break;
+
+        case LUA_TBOOLEAN:
+            value.len = sizeof(u_char);
+            c = lua_toboolean(L, -1) ? 1 : 0;
+            value.data = &c;
+            break;
+
         case LUA_TTABLE:
             break;
 
@@ -79,11 +93,11 @@ ngx_http_lua_shm_set_table(ngx_http_request_t *r, lua_State *L,
                + offsetof(ngx_http_lua_shm_node_t, data)
                + key.len;
 
-        if (value_type == LUA_TSTRING) {
-            size += value.len;
+        if (value_type == LUA_TTABLE) {
+            size += sizeof(ngx_http_lua_shm_table_t);
 
         } else {
-            size += sizeof(ngx_http_lua_shm_table_t);
+            size += value.len;
         }
 
         node = ngx_slab_alloc_locked(ctx->shpool, size);
@@ -97,11 +111,7 @@ ngx_http_lua_shm_set_table(ngx_http_request_t *r, lua_State *L,
         ln->key_len = (u_short) key.len;
         p = ngx_copy(ln->data, key.data, key.len);
 
-        if (value_type == LUA_TSTRING) {
-            ln->value_len = (uint32_t) value.len;
-            ngx_memcpy(p, value.data, value.len);
-
-        } else {
+        if (value_type == LUA_TTABLE) {
             parent = ngx_http_lua_shm_get_table_head(ln);
             rc = ngx_http_lua_shm_set_table(r, L, ctx, parent, -2);
             if (rc != NGX_OK) {
@@ -109,6 +119,10 @@ ngx_http_lua_shm_set_table(ngx_http_request_t *r, lua_State *L,
                 ngx_slab_free_locked(ctx->shpool, node);
                 return NGX_ERROR;
             }
+
+        } else {
+            ln->value_len = (uint32_t) value.len;
+            ngx_memcpy(p, value.data, value.len);
         }
 
         ln->value_type = value_type;;

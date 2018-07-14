@@ -81,7 +81,9 @@ ngx_http_lua_shm_set(lua_State *L)
 {
     int                        nargs;
     int                        value_type;
+    u_char                     c;
     u_char                    *p;
+    double                     num;
     size_t                     size;
     uint32_t                   hash;
     ngx_int_t                  rc;
@@ -127,6 +129,18 @@ ngx_http_lua_shm_set(lua_State *L)
         value.data = (u_char *) luaL_checklstring(L, 3, &value.len);
         break;
 
+    case LUA_TNUMBER:
+        num = lua_tonumber(L, 3);
+        value.len = sizeof(double);
+        value.data = (u_char *) &num;
+        break;
+
+    case LUA_TBOOLEAN:
+        value.len = sizeof(u_char);
+        c = lua_toboolean(L, 3) ? 1 : 0;
+        value.data = &c;
+        break;
+
     case LUA_TTABLE:
         break;
 
@@ -148,15 +162,11 @@ ngx_http_lua_shm_set(lua_State *L)
            + offsetof(ngx_http_lua_shm_node_t, data)
            + key.len;
 
-    switch (value_type) {
-
-    case LUA_TSTRING:
-        size += value.len;
-        break;
-
-    case LUA_TTABLE:
+    if (value_type == LUA_TTABLE) {
         size += sizeof(ngx_http_lua_shm_table_t);
-        break;
+
+    } else {
+        size += value.len;
     }
 
     node = ngx_slab_alloc_locked(ctx->shpool, size);
@@ -173,14 +183,7 @@ ngx_http_lua_shm_set(lua_State *L)
     ln->key_len = (u_short) key.len;
     p = ngx_copy(ln->data, key.data, key.len);
 
-    switch (value_type) {
-
-    case LUA_TSTRING:
-        ln->value_len = (uint32_t) value.len;
-        ngx_memcpy(p, value.data, value.len);
-        break;
-
-    case LUA_TTABLE:
+    if (value_type == LUA_TTABLE) {
 
         table = ngx_http_lua_shm_get_table_head(ln);
 
@@ -196,7 +199,9 @@ ngx_http_lua_shm_set(lua_State *L)
             return luaL_error(L, "invalid table value");
         }
 
-        break; 
+    } else {
+        ln->value_len = (uint32_t) value.len;
+        ngx_memcpy(p, value.data, value.len);
     }
 
     ln->value_type = value_type;
@@ -217,6 +222,8 @@ static int
 ngx_http_lua_shm_get(lua_State *L)
 {
     int                        nargs;
+    u_char                     c;
+    double                     num;
     uint32_t                   hash;
     ngx_int_t                  rc;
     ngx_str_t                  key, value;
@@ -257,15 +264,33 @@ ngx_http_lua_shm_get(lua_State *L)
 
         rc = ngx_http_lua_shm_lookup(&table->rbtree, hash, &key, &ln);
 
-        if (rc != NGX_OK || ln->value_type != LUA_TSTRING) {
+        if (rc != NGX_OK) {
             goto not_found;
         }
     }
 
-    value.len = ln->value_len;
     value.data = ln->data + ln->key_len;
+    value.len = (size_t) ln->value_len;
 
-    lua_pushlstring(L, (const char *) value.data, value.len);
+    switch (ln->value_type) {
+
+    case LUA_TSTRING:
+        lua_pushlstring(L, (const char *) value.data, value.len);
+        break;
+
+    case LUA_TNUMBER:
+        ngx_memcpy(&num, value.data, sizeof(double));
+        lua_pushnumber(L, num);
+        break;
+
+    case LUA_TBOOLEAN:
+        c = *value.data;
+        lua_pushboolean(L, c ? 1 : 0);
+        break;
+
+    default:
+        goto not_found;
+    }
 
     ngx_shmtx_unlock(&ctx->shpool->mutex);
 
