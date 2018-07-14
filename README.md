@@ -139,6 +139,8 @@ function access2()
     local data = [==[
 {
     "glossary": {
+        "version": 1001,
+        "active": true,
         "title": "example glossary",
         "GlossDiv": {
             "title": "S",
