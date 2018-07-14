@@ -148,10 +148,7 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
 
     r->preserve_body = 1;
 
-    if (ctx->wait_body) {
-
-        ctx->wait_body = 0;
-
+    if (ctx->wait) {
         r->write_event_handler = ngx_http_core_run_phases;
         ngx_http_lua_wakeup(ctx);
     }
@@ -180,7 +177,6 @@ ngx_http_lua_read_body(lua_State *L)
     r->main->count--;
 
     if (rc == NGX_AGAIN) {
-        ctx->wait_body = 1;
         return ngx_http_lua_yield(r);
     }
 

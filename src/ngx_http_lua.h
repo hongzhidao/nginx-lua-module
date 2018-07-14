@@ -35,7 +35,7 @@ typedef struct {
     lua_State                  *thread;
     ngx_int_t                   status;
     ngx_event_t                *wake;
-    ngx_flag_t                  wait_body;
+    ngx_flag_t                  wait;
 } ngx_http_lua_ctx_t;
 
 

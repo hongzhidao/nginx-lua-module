@@ -220,6 +220,10 @@ ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name, ngx_event_t *wake)
         return NGX_ERROR;
     }
 
+    if (ctx->wait) {
+        return NGX_AGAIN;
+    }
+
     state = lmcf->state;
     L = ctx->thread;
 
@@ -342,6 +346,7 @@ ngx_http_lua_yield(ngx_http_request_t *r)
     L = ctx->thread;
 
     if (ctx->wake) {
+        ctx->wait = 1;
         return lua_yield(L, 0);
     }
 
@@ -352,5 +357,6 @@ ngx_http_lua_yield(ngx_http_request_t *r)
 void
 ngx_http_lua_wakeup(ngx_http_lua_ctx_t *ctx)
 {
+    ctx->wait = 0;
     ngx_post_event(ctx->wake, &ngx_posted_events);
 }
