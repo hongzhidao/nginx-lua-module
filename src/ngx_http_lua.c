@@ -223,7 +223,7 @@ ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name, ngx_event_t *wake)
     state = lmcf->state;
     L = ctx->thread;
 
-    if (wake != NULL && ctx->wake) {
+    if (ctx->wake) {
         goto resume;
     }
 
