@@ -26,6 +26,7 @@ typedef struct {
 typedef struct {
     ngx_str_t                   access;
     ngx_str_t                   content;
+    ngx_str_t                   header_filter;
 } ngx_http_lua_loc_conf_t;
 
 

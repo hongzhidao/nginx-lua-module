@@ -61,6 +61,13 @@ static ngx_command_t  ngx_http_lua_commands[] = {
       0,
       NULL },
 
+    { ngx_string("lua_header_filter"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_lua_loc_conf_t, header_filter),
+      NULL },
+
     ngx_null_command
 };
 
@@ -94,6 +101,38 @@ ngx_module_t  ngx_http_lua_module = {
     NULL,                          /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+
+static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
+
+
+static ngx_int_t
+ngx_http_lua_header_filter(ngx_http_request_t *r)
+{
+    ngx_int_t                     rc;
+    ngx_http_lua_loc_conf_t     *flcf;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua header filter handler");
+
+    flcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
+
+    if (flcf->header_filter.len == 0) {
+        return ngx_http_next_header_filter(r);
+    }
+
+    /* Async operations is not allowed in header filter. */
+
+    rc = ngx_http_lua_eval(r, &flcf->header_filter, NULL);
+
+    if (rc == NGX_ERROR) {
+        return NGX_ERROR;
+    }
+
+    /* NGX_DECLINED, NGX_OK */
+
+    return ngx_http_next_header_filter(r);
+}
 
 
 static ngx_int_t
@@ -438,6 +477,10 @@ ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         conf->content = prev->content;
     }
 
+    if (conf->header_filter.data == NULL) {
+        conf->header_filter = prev->header_filter;
+    }
+
     return NGX_CONF_OK;
 }
 
@@ -453,17 +496,26 @@ ngx_http_lua_init(ngx_conf_t *cf)
     lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
     cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
 
+    rc = ngx_http_lua_init_state(cf, lmcf);
+
+    if (rc == NGX_DECLINED) {
+        return NGX_OK;
+    }
+
+    if (rc == NGX_ERROR) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "failed to init lua state");
+        return NGX_ERROR;
+    }
+
+    ngx_http_next_header_filter = ngx_http_top_header_filter;
+    ngx_http_top_header_filter = ngx_http_lua_header_filter;
+
     h = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
     if (h == NULL) {
         return NGX_ERROR;
     }
 
     *h = ngx_http_lua_access_handler;
-
-    rc = ngx_http_lua_init_state(cf, lmcf);
-    if (rc != NGX_OK) {
-        return NGX_ERROR;
-    }
 
     return NGX_OK;
 }

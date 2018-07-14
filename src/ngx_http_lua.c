@@ -21,9 +21,9 @@ ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
     lua_State             *L;
     ngx_pool_cleanup_t    *cln;
 
-    if (lmcf->state) {
-        return NGX_OK;
-    }
+    if (lmcf->file.len == 0) {
+        return NGX_DECLINED;
+    } 
 
     L = luaL_newstate();
     if (L == NULL) {
@@ -223,7 +223,7 @@ ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name, ngx_event_t *wake)
     state = lmcf->state;
     L = ctx->thread;
 
-    if (ctx->wake) {
+    if (wake != NULL && ctx->wake) {
         goto resume;
     }
 
@@ -318,7 +318,9 @@ ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name, ngx_str_t *result)
     ctx->wake = wake;
 
     if (status == LUA_OK) {
-        result->data = (u_char *) luaL_checklstring(L, -1, &result->len); 
+        if (result) {
+            result->data = (u_char *) luaL_checklstring(L, -1, &result->len); 
+        }
         return NGX_OK;
     }
 
