@@ -23,6 +23,7 @@ Directives
 - ``lua_set`` (http)
 - ``lua_access`` (http|server|location)
 - ``lua_content`` (http|server|location)
+- ``lua_header_filter`` (http|server|location)
 
 Apis
 ====
@@ -61,6 +62,8 @@ http {
     lua_shm  test 1M;
     lua_include  http.lua;
     lua_set $foo  foo;
+    
+    lua_header_filter  header_filter;
 
     server {
         listen 8000;
@@ -86,6 +89,11 @@ package.cpath = package.cpath .. ";/usr/local/nginx/lua/?.so;";
 
 function foo()
     return "This is a variable";
+end
+
+
+function header_filter()
+    ngx.headers['X-Test'] = "test test test";
 end
 
 
