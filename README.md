@@ -33,13 +33,13 @@ Apis
 - ``ngx.remote_addr`` the client ip, readonly.
 - ``ngx.status`` the client HTTP response status.
 - ``ngx.arg{}`` the client HTTP request args, readonly.
-- ``ngx.header{}`` the client HTTP request header, readonly.
-- ``ngx.headers{}`` the client HTTP response header.
 - ``ngx.request_body`` the client HTTP request body.
 - ``ngx.var{}``
 - ``ngx.log(msg)``
 - ``ngx.warn(msg)``
 - ``ngx.error(msg)``
+- ``ngx.header_in(name)`` the client HTTP request header, readonly.
+- ``ngx.header_out(name[, value])`` the client HTTP response header.
 - ``ngx.read_body()`` call this first while use ngx.request_body before content phase. 
 - ``ngx.finish(status, desc``)
 - ``ngx.shm.x:set(k, ...)``
@@ -93,7 +93,7 @@ end
 
 
 function header_filter()
-    ngx.headers['X-Test'] = "test test test";
+    ngx.header_out('X-Test', "test test test");
 end
 
 
@@ -114,7 +114,7 @@ function content1()
 
     local arg = ngx.arg.x or "arg x";
     local uri = ngx.uri;
-    local hi = ngx.header["Accept-Language"] or "header accept language";
+    local hi = ngx.header_in("Accept-Language") or "header accept language";
     local body = ngx.request_body or "body";
 
     local k1 = shm:get("k1") or "not";
@@ -135,7 +135,7 @@ function content1()
 
     html = html .. content .. "</body></html>";
 
-    ngx.headers["Content-Type"] = "text/html";
+    ngx.header_out("Content-Type", "text/html");
 
     ngx.finish(200, html);
 end
