@@ -31,7 +31,7 @@ Apis
 - ``ngx.uri`` the client HTTP request uri, readonly.
 - ``ngx.http_version`` the client HTTP request version, readonly.
 - ``ngx.remote_addr`` the client ip, readonly.
-- ``ngx.status`` the client HTTP response status.
+- ``ngx.status`` the client HTTP response status, readonly.
 - ``ngx.arg{}`` the client HTTP request args, readonly.
 - ``ngx.request_body`` the client HTTP request body.
 - ``ngx.var{}``
@@ -41,7 +41,7 @@ Apis
 - ``ngx.header_in(name)`` the client HTTP request header, readonly.
 - ``ngx.header_out(name[, value])`` the client HTTP response header.
 - ``ngx.read_body()`` call this first while use ngx.request_body before content phase. 
-- ``ngx.finish(status, desc``)
+- ``ngx.exit(status, desc``)
 - ``ngx.shm.x:set(k, ...)``
 - ``ngx.shm.x:get(k, ...)``
 - ``ngx.shm.x:del(k, ...)``
@@ -137,7 +137,7 @@ function content1()
 
     ngx.header_out("Content-Type", "text/html");
 
-    ngx.finish(200, html);
+    ngx.exit(200, html);
 end
 
 
@@ -179,7 +179,7 @@ function access2()
 
     local s = shm:get("test", "glossary", "GlossDiv", "GlossList", "GlossEntry", "GlossDef", "para");
 
-    ngx.finish(200, s);
+    ngx.exit(200, s);
 end
 ```
 
