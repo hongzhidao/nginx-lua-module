@@ -156,7 +156,7 @@ ngx_http_lua_access_handler(ngx_http_request_t *r)
         return NGX_HTTP_OK;
     }
 
-    /* NGX_OK, NGX_AGAIN, NGX_DECLINED, NGX_ERROR */
+    /* NGX_OK, NGX_AGAIN, NGX_DECLINED, NGX_ERROR, NGX_HTTP_... */
 
     return rc;
 }

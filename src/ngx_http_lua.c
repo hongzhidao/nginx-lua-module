@@ -165,8 +165,6 @@ ngx_http_lua_get_ctx(ngx_http_request_t *r)
 
     ngx_http_set_ctx(r, ctx, ngx_http_lua_module);
 
-    ctx->status = NGX_HTTP_INTERNAL_SERVER_ERROR;
-
     cln = ngx_pool_cleanup_add(r->pool, 0);
     if (cln == NULL) {
         return NULL;
@@ -263,7 +261,7 @@ resume:
     ctx->wake = NULL;
 
     if (status == LUA_OK) {
-        return NGX_OK;
+        return ctx->status ? ctx->status : NGX_OK;
     }
 
     msg = ngx_http_lua_get_error(L);

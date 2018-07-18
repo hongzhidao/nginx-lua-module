@@ -16,7 +16,6 @@ static int ngx_http_lua_req_uri(lua_State *L);
 static int ngx_http_lua_req_http_version(lua_State *L);
 static int ngx_http_lua_req_body(lua_State *L);
 static int ngx_http_lua_get_status(lua_State *L);
-static int ngx_http_lua_set_status(lua_State *L);
 
 
 void
@@ -67,15 +66,6 @@ ngx_http_lua_register_request(lua_State *L)
 
     ngx_http_lua_set_meta(L, -2);
     /* } __meta */
-
-    /* __newmeta { */
-    lua_createtable(L, 0, 4);
-
-    lua_pushcfunction(L, ngx_http_lua_set_status);
-    lua_setfield(L, -2, "status");
-
-    ngx_http_lua_set_newmeta(L, -2);
-    /* } __newmeta */
 
     /* metatable { */
     lua_createtable(L, 0, 4);
@@ -276,20 +266,4 @@ ngx_http_lua_get_status(lua_State *L)
     lua_pushinteger(L, r->headers_out.status);
 
     return 1;
-}
-
-
-static int
-ngx_http_lua_set_status(lua_State *L)
-{
-    ngx_int_t            n;
-    ngx_http_request_t  *r;
-
-    r = ngx_http_lua_get_request(L);
-
-    n = luaL_checkinteger(L, -1);
-
-    r->headers_out.status = n;
-
-    return 0;
 }

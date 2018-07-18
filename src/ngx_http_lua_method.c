@@ -8,7 +8,7 @@
 #include <ngx_http_lua.h>
 
 
-static int ngx_http_lua_finish(lua_State *L);
+static int ngx_http_lua_exit(lua_State *L);
 static int ngx_http_lua_log(lua_State *L);
 static int ngx_http_lua_warn(lua_State *L);
 static int ngx_http_lua_error(lua_State *L);
@@ -20,8 +20,8 @@ static int ngx_http_lua_read_body(lua_State *L);
 void
 ngx_http_lua_register_method(lua_State *L)
 {
-    lua_pushcfunction(L, ngx_http_lua_finish);
-    lua_setfield(L, -2, "finish");
+    lua_pushcfunction(L, ngx_http_lua_exit);
+    lua_setfield(L, -2, "exit");
 
     lua_pushcfunction(L, ngx_http_lua_log);
     lua_setfield(L, -2, "log");
@@ -44,7 +44,7 @@ ngx_http_lua_register_method(lua_State *L)
 
 
 static int
-ngx_http_lua_finish(lua_State *L)
+ngx_http_lua_exit(lua_State *L)
 {
     int                        n;
     ngx_str_t                  text;
