@@ -396,8 +396,6 @@ ngx_http_lua_shm_keys(lua_State *L)
     zone = ngx_http_lua_shm_get_zone(L, 1);
     ctx = zone->data;
 
-    ngx_shmtx_lock(&ctx->shpool->mutex);
-
     queue = &ctx->sh->queue;
 
     if (nargs > 1) {
@@ -405,6 +403,8 @@ ngx_http_lua_shm_keys(lua_State *L)
         key.data = (u_char *) luaL_checklstring(L, 2, &key.len);
 
         hash = ngx_crc32_short(key.data, key.len);
+
+        ngx_shmtx_lock(&ctx->shpool->mutex);
 
         rc = ngx_http_lua_shm_lookup(&ctx->sh->rbtree, hash, &key, &ln);
         if (rc != NGX_OK) {
@@ -421,6 +421,9 @@ ngx_http_lua_shm_keys(lua_State *L)
         }
 
         queue = &table->queue;
+
+    } else {
+        ngx_shmtx_lock(&ctx->shpool->mutex);
     }
 
     if (ngx_queue_empty(queue)) {
