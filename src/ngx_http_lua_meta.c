@@ -97,10 +97,13 @@ ngx_http_lua_register_meta(lua_State *L)
 
     /* metatable { */
     lua_createtable(L, 0, 4);
+
     lua_pushcfunction(L, ngx_http_lua_get_index);
     lua_setfield(L, -2, "__index");
+
     lua_pushcfunction(L, ngx_http_lua_set_index);
     lua_setfield(L, -2, "__newindex");
+
     lua_setmetatable(L, -2);
     /* } metatable */
 }

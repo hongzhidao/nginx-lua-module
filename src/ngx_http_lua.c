@@ -15,8 +15,7 @@ ngx_int_t
 ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
 {
     int                    status;
-    u_char                *msg;
-    u_char                *path;
+    u_char                *path, *msg;
     ngx_str_t             *file;
     lua_State             *L;
     ngx_pool_cleanup_t    *cln;
@@ -34,10 +33,9 @@ ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
 
     lua_createtable(L, 0, 100);
 
-    ngx_http_lua_register_shm(L, lmcf);
     ngx_http_lua_register_meta(L);
 
-    lua_setglobal(L, "ngx");
+    lua_setglobal(L, "_ngx");
 
     cln = ngx_pool_cleanup_add(cf->pool, 0);
     if (cln == NULL) {
@@ -76,7 +74,7 @@ ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
 
 error:
 
-    msg = ngx_http_lua_get_error(L);
+    msg = (u_char *) lua_tostring(L, -1);
 
     ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "%s", msg);
 
@@ -175,6 +173,8 @@ ngx_http_lua_get_ctx(ngx_http_request_t *r)
 
     ngx_http_lua_set_request(ctx->thread, r);
 
+    ctx->status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+
     return ctx;
 }
 
@@ -194,13 +194,40 @@ ngx_http_lua_cleanup_thread(void *data)
 }
 
 
+static ngx_int_t
+ngx_http_lua_get_func(ngx_http_request_t *r, lua_State *state, lua_State *L,
+    ngx_str_t *name)
+{
+    u_char  *func;
+
+    func = ngx_pcalloc(r->pool, name->len + 1);
+    if (func == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memcpy(func, name->data, name->len);
+    *((char *) func + name->len) = '\0';
+
+    lua_getglobal(state, (const char *) func);
+
+    if (lua_type(state, -1) != LUA_TFUNCTION) {
+        lua_pop(state, 1);
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "can't find function: %s", func);
+        return NGX_ERROR;
+    }
+
+    lua_xmove(state, L, 1);
+
+    return NGX_OK;
+}
+
+
 ngx_int_t 
 ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name, ngx_event_t *wake)
 {
     int                          status, nresults;
-    u_char                      *msg;
-    u_char                      *func;
-    lua_State                   *state, *L;
+    lua_State                   *L;
     ngx_http_lua_ctx_t          *ctx;
     ngx_http_lua_main_conf_t    *lmcf;
 
@@ -215,37 +242,19 @@ ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name, ngx_event_t *wake)
         return NGX_AGAIN;
     }
 
-    state = lmcf->state;
     L = ctx->thread;
 
-    if (ctx->wake) {
-        goto resume;
+    if (!ctx->wake) {
+        ctx->wake = wake;
+
+        if (ngx_http_lua_get_func(r, lmcf->state, L, name) != NGX_OK) {
+            return NGX_DECLINED;
+        }
     }
 
-    ctx->wake = wake;
+    lua_getglobal(L, "_ngx");
 
-    func = ngx_pcalloc(r->pool, name->len + 1);
-    if (func == NULL) {
-        return NGX_ERROR;
-    }
-
-    ngx_memcpy(func, name->data, name->len);
-    *((char *) func + name->len) = '\0';
-
-    lua_getglobal(state, (const char *) func);
-
-    if (lua_type(state, -1) != LUA_TFUNCTION) {
-        lua_pop(state, 1);
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, 
-                      "can't find function: %s", func);
-        return NGX_DECLINED;
-    }
-
-    lua_xmove(state, L, 1);
-
-resume:
-
-    status = lua_resume(L, NULL, 0, &nresults);
+    status = lua_resume(L, NULL, 1, &nresults);
 
     if (status == LUA_YIELD) {
         return NGX_AGAIN;
@@ -257,12 +266,7 @@ resume:
         return ctx->status ? ctx->status : NGX_OK;
     }
 
-    msg = ngx_http_lua_get_error(L);
-
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                  "lua exception: %s", msg);
-    
-    return NGX_ERROR;
+    return ngx_http_lua_err(L, r->connection->log);
 }
 
 
@@ -270,8 +274,7 @@ ngx_int_t
 ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name, ngx_str_t *result)
 {
     int                          status;
-    u_char                      *func;
-    lua_State                   *state, *L;
+    lua_State                   *L;
     ngx_event_t                 *wake;
     ngx_http_lua_ctx_t          *ctx;
     ngx_http_lua_main_conf_t    *lmcf;
@@ -283,32 +286,18 @@ ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name, ngx_str_t *result)
         return NGX_ERROR;
     }
 
-    state = lmcf->state;
     L = ctx->thread;
 
-    func = ngx_pcalloc(r->pool, name->len + 1);
-    if (func == NULL) {
-        return NGX_ERROR;
-    }
-
-    ngx_memcpy(func, name->data, name->len);
-    *((char *) func + name->len) = '\0';
-
-    lua_getglobal(state, (const char *) func);
-
-    if (lua_type(state, -1) != LUA_TFUNCTION) {
-        lua_pop(state, 1);
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, 
-                      "can't find function: %s", func);
+    if (ngx_http_lua_get_func(r, lmcf->state, L, name) != NGX_OK) {
         return NGX_DECLINED;
     }
-
-    lua_xmove(state, L, 1);
 
     wake = ctx->wake;
     ctx->wake = NULL;
 
-    status = lua_pcall(L, 0, 1, 0);
+    lua_getglobal(L, "_ngx");
+
+    status = lua_pcall(L, 1, 1, 0);
 
     ctx->wake = wake;
 
@@ -319,11 +308,7 @@ ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name, ngx_str_t *result)
         return NGX_OK;
     }
 
-    const char *msg = lua_tostring(L, -1);
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                  "lua exception: %s", msg);
-    
-    return NGX_ERROR;
+    return ngx_http_lua_err(L, r->connection->log);
 }
 
 

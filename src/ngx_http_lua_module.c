@@ -10,15 +10,12 @@
 static void ngx_http_lua_content_event_handler(ngx_http_request_t *r);
 static ngx_int_t ngx_http_lua_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v, uintptr_t data);
-
 static ngx_int_t ngx_http_lua_init(ngx_conf_t *cf);
 static void *ngx_http_lua_create_main_conf(ngx_conf_t *cf);
 static char *ngx_http_lua_init_main_conf(ngx_conf_t *cf, void *conf);
 static void *ngx_http_lua_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
-
-static char *ngx_http_lua_shm(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_lua_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_lua_content(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
@@ -31,13 +28,6 @@ static ngx_command_t  ngx_http_lua_commands[] = {
       ngx_conf_set_str_slot,
       NGX_HTTP_MAIN_CONF_OFFSET,
       offsetof(ngx_http_lua_main_conf_t, file),
-      NULL },
-
-    { ngx_string("lua_shm"),
-      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE2,
-      ngx_http_lua_shm,
-      0,
-      0,
       NULL },
 
     { ngx_string("lua_set"),
@@ -207,117 +197,6 @@ ngx_http_lua_content_event_handler(ngx_http_request_t *r)
 
 
 static ngx_int_t
-ngx_http_lua_init_zone(ngx_shm_zone_t *shm_zone, void *data)
-{
-    ngx_http_lua_shm_ctx_t  *octx = data;
-
-    size_t                      len;
-    ngx_http_lua_shm_ctx_t      *ctx;
-
-    ctx = shm_zone->data;
-
-    if (octx) {
-        ctx->sh = octx->sh;
-        ctx->shpool = octx->shpool;
-        return NGX_OK;
-    }
-
-    ctx->shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
-
-    if (shm_zone->shm.exists) {
-        ctx->sh = ctx->shpool->data;
-        return NGX_OK;
-    }
-
-    ctx->sh = ngx_slab_alloc(ctx->shpool, sizeof(ngx_http_lua_shm_shctx_t));
-    if (ctx->sh == NULL) {
-        return NGX_ERROR;
-    }
-
-    ctx->shpool->data = ctx->sh;
-
-    ngx_rbtree_init(&ctx->sh->rbtree, &ctx->sh->sentinel,
-                    ngx_http_lua_shm_rbtree_insert_value);
-
-    ngx_queue_init(&ctx->sh->queue);
-
-    len = sizeof(" in lua_shm \"\"") + shm_zone->shm.name.len;
-
-    ctx->shpool->log_ctx = ngx_slab_alloc(ctx->shpool, len);
-    if (ctx->shpool->log_ctx == NULL) {
-        return NGX_ERROR;
-    }
-
-    ngx_sprintf(ctx->shpool->log_ctx, " in lua_shm \"%V\"%Z",
-                &shm_zone->shm.name);
-
-    ctx->shpool->log_nomem = 0;
-
-    return NGX_OK;
-}
-
-
-static char *
-ngx_http_lua_shm(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-    ngx_http_lua_main_conf_t  *lmcf = conf;
-
-    ssize_t                     size;
-    ngx_str_t                  *value, name;
-    ngx_shm_zone_t             *zone, **zp;
-    ngx_http_lua_shm_ctx_t     *ctx;
-
-    value = cf->args->elts;
-
-    ctx = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_shm_ctx_t));
-    if (ctx == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    if (value[1].len == 0) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "invalid lua shm zone name \"%V\"", &value[1]);
-        return NGX_CONF_ERROR;
-    }
-
-    name = value[1];
-
-    size = ngx_parse_size(&value[2]);
-
-    if (size <= 8191) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "invalid lua shm zone size \"%V\"", &value[2]);
-        return NGX_CONF_ERROR;
-    }
-
-    zone = ngx_shared_memory_add(cf, &name, size,
-                                 &ngx_http_lua_module);
-    if (zone == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    if (zone->data) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "lua_shm \"%V\" is already defined as "
-                           "\"%V\"", &name, &zone->shm.name);
-        return NGX_CONF_ERROR;
-    }
-
-    zone->init = ngx_http_lua_init_zone;
-    zone->data = ctx;
-
-    zp = ngx_array_push(&lmcf->shm_zones);
-    if (zp == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    *zp = zone;
-
-    return NGX_CONF_OK;
-}
-
-
-static ngx_int_t
 ngx_http_lua_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v,
     uintptr_t data)
 {
@@ -423,13 +302,6 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
      *
      *     conf->state = NULL;
      */
-
-    if (ngx_array_init(&conf->shm_zones, cf->pool, 2,
-                       sizeof(ngx_shm_zone_t *))
-        != NGX_OK)
-    {
-        return NGX_CONF_ERROR;
-    }
 
     return conf;
 }
