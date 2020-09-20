@@ -88,10 +88,7 @@ error:
 int
 ngx_http_lua_get_index(lua_State *L)
 {
-    ngx_str_t                   name;
-    ngx_http_request_t         *r;
-
-    r = ngx_http_lua_get_request(L);
+    ngx_str_t  name;
 
     name.data = (u_char *) luaL_checklstring(L, -1, &name.len);
 
@@ -112,10 +109,7 @@ ngx_http_lua_get_index(lua_State *L)
 int
 ngx_http_lua_set_index(lua_State *L)
 {
-    ngx_str_t                   name;
-    ngx_http_request_t         *r;
-
-    r = ngx_http_lua_get_request(L);
+    ngx_str_t  name;
 
     name.data = (u_char *) luaL_checklstring(L, -2, &name.len);
 

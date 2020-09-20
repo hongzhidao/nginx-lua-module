@@ -305,10 +305,8 @@ ngx_http_lua_read_body(lua_State *L)
 {
     ngx_int_t                  rc;
     ngx_http_request_t        *r;
-    ngx_http_lua_ctx_t        *ctx;
 
     r = ngx_http_lua_get_request(L);
-    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
 
     r->request_body_in_single_buf = 1;
     r->request_body_in_persistent_file = 1;
