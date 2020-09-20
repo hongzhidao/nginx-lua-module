@@ -35,8 +35,7 @@ ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
     lua_createtable(L, 0, 100);
 
     ngx_http_lua_register_shm(L, lmcf);
-    ngx_http_lua_register_method(L);
-    ngx_http_lua_register_request(L);
+    ngx_http_lua_register_meta(L);
 
     lua_setglobal(L, "ngx");
 
