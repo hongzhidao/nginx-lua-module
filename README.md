@@ -43,14 +43,14 @@ request object
 ngx object
 ==========
 Log error levels  
-- ngx.LOG_EMERG
-- ngx.LOG_ALERT
-- ngx.LOG_CRIT
-- ngx.LOG_ERR
-- ngx.LOG_WARN
-- ngx.LOG_NOTICE
-- ngx.LOG_INFO
-- ngx.LOG_DEBUG
+- ``ngx.LOG_EMERG``
+- ``ngx.LOG_ALERT``
+- ``ngx.LOG_CRIT``
+- ``ngx.LOG_ERR``
+- ``ngx.LOG_WARN``
+- ``ngx.LOG_NOTICE``
+- ``ngx.LOG_INFO``
+- ``ngx.LOG_DEBUG``
 
 
 Example
@@ -58,7 +58,6 @@ Example
 
 nginx.conf
 ```
-
 events {}
 
 http {
@@ -79,7 +78,6 @@ http {
 
 http.lua
 ```
-
 package.path = package.path .. ";/usr/local/nginx/lua/?.lua;";
 package.cpath = package.cpath .. ";/usr/local/nginx/lua/?.so;";
 
