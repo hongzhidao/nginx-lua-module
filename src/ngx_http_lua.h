@@ -49,7 +49,9 @@ ngx_int_t ngx_http_lua_init_state(ngx_conf_t *cf,
     ngx_http_lua_main_conf_t *lmcf);
 int ngx_http_lua_get_index(lua_State *L);
 int ngx_http_lua_set_index(lua_State *L);
-void ngx_http_lua_register_meta(lua_State *L);
+void ngx_http_lua_register_request(lua_State *L);
+void ngx_http_lua_register_global(lua_State *L);
+int ngx_http_lua_fetch(lua_State *L);
 ngx_int_t ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name,
     ngx_event_t *wake);
 ngx_int_t ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name,

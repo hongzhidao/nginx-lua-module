@@ -16,18 +16,18 @@ static int ngx_http_lua_req_uri(lua_State *L);
 static int ngx_http_lua_req_http_version(lua_State *L);
 static int ngx_http_lua_req_body(lua_State *L);
 static int ngx_http_lua_get_status(lua_State *L);
-static int ngx_http_lua_exit(lua_State *L);
-static int ngx_http_lua_log(lua_State *L);
-static int ngx_http_lua_warn(lua_State *L);
-static int ngx_http_lua_error(lua_State *L);
 static int ngx_http_lua_header_in(lua_State *L);
 static int ngx_http_lua_header_out(lua_State *L);
 static int ngx_http_lua_read_body(lua_State *L);
+static int ngx_http_lua_exit(lua_State *L);
+static int ngx_http_lua_log(lua_State *L);
 
 
 void
-ngx_http_lua_register_meta(lua_State *L)
+ngx_http_lua_register_request(lua_State *L)
 {
+    lua_createtable(L, 0, 100);
+
     /* args { */
     lua_newtable(L);
 
@@ -74,18 +74,6 @@ ngx_http_lua_register_meta(lua_State *L)
     ngx_http_lua_set_meta(L, -2);
     /* } __meta */
 
-    lua_pushcfunction(L, ngx_http_lua_exit);
-    lua_setfield(L, -2, "exit");
-
-    lua_pushcfunction(L, ngx_http_lua_log);
-    lua_setfield(L, -2, "log");
-
-    lua_pushcfunction(L, ngx_http_lua_warn);
-    lua_setfield(L, -2, "warn");
-
-    lua_pushcfunction(L, ngx_http_lua_error);
-    lua_setfield(L, -2, "error");
-
     lua_pushcfunction(L, ngx_http_lua_header_in);
     lua_setfield(L, -2, "header_in");
 
@@ -94,6 +82,12 @@ ngx_http_lua_register_meta(lua_State *L)
 
     lua_pushcfunction(L, ngx_http_lua_read_body);
     lua_setfield(L, -2, "read_body");
+
+    lua_pushcfunction(L, ngx_http_lua_exit);
+    lua_setfield(L, -2, "exit");
+
+    lua_pushcfunction(L, ngx_http_lua_log);
+    lua_setfield(L, -2, "log");
 
     /* metatable { */
     lua_createtable(L, 0, 4);
@@ -106,6 +100,8 @@ ngx_http_lua_register_meta(lua_State *L)
 
     lua_setmetatable(L, -2);
     /* } metatable */
+
+    lua_setglobal(L, "_request");
 }
 
 
@@ -300,110 +296,6 @@ ngx_http_lua_get_status(lua_State *L)
 }
 
 
-static int
-ngx_http_lua_exit(lua_State *L)
-{
-    int                        n;
-    ngx_str_t                  text;
-    ngx_int_t                  status;
-    ngx_http_request_t        *r;
-    ngx_http_lua_ctx_t        *ctx;
-    ngx_http_complex_value_t   cv;
-
-    r = ngx_http_lua_get_request(L);
-
-    n = lua_gettop(L);
-    if (n < 1) {
-        return luaL_error(L, "too few arguments");
-    }
-
-    status = luaL_checkinteger(L, 1);
-
-    if (status < 0 || status > 999) {
-        return luaL_error(L, "code is out of range");
-    }
-
-    if (n < 2) {
-        text.data = NULL;
-        text.len = 0;
-
-    } else {
-        text.data = (u_char *) luaL_checklstring(L, 2, &text.len);
-    }
-
-    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
-
-    if (status < NGX_HTTP_BAD_REQUEST || text.len) {
-        ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
-
-        cv.value.data = text.data;
-        cv.value.len = text.len;
-
-        ctx->status = ngx_http_send_response(r, status, NULL, &cv);
-
-        if (ctx->status == NGX_ERROR) {
-            return luaL_error(L, "failed to send response");
-        }
-
-    } else {
-        ctx->status = status;
-    }
-
-    return 0;
-}
-
-
-static int
-ngx_http_lua_log_core(lua_State *L, ngx_uint_t level)
-{
-    int                        n;
-    ngx_str_t                  msg;
-    ngx_connection_t          *c;
-    ngx_http_request_t        *r;
-    ngx_log_handler_pt         handler;
-
-    r = ngx_http_lua_get_request(L);
-    c = r->connection;
-
-    n = lua_gettop(L);
-    if (n < 1) {
-        return luaL_error(L, "too few arguments");
-    }
-
-    msg.data = (u_char *) luaL_checklstring(L, 1, &msg.len);
-
-    handler = c->log->handler;
-    c->log->handler = NULL;
-
-    ngx_log_error(level, c->log, 0, "lua: %*s", msg.len, msg.data);
-
-    c->log->handler = handler;
-
-    return 0;
-}
-
-
-static int
-ngx_http_lua_log(lua_State *L)
-{
-    return ngx_http_lua_log_core(L, NGX_LOG_INFO);
-}
-
-
-static int
-ngx_http_lua_warn(lua_State *L)
-{
-    return ngx_http_lua_log_core(L, NGX_LOG_WARN);
-}
-
-
-static int
-ngx_http_lua_error(lua_State *L)
-{
-    return ngx_http_lua_log_core(L, NGX_LOG_ERR);
-}
-
-
 static ngx_table_elt_t *
 ngx_http_lua_get_header(ngx_list_part_t *part, u_char *data, size_t len)
 {
@@ -579,6 +471,88 @@ ngx_http_lua_read_body(lua_State *L)
     if (rc == NGX_AGAIN) {
         return ngx_http_lua_yield(r);
     }
+
+    return 0;
+}
+
+
+static int
+ngx_http_lua_exit(lua_State *L)
+{
+    int                        n;
+    ngx_str_t                  text;
+    ngx_int_t                  status;
+    ngx_http_request_t        *r;
+    ngx_http_lua_ctx_t        *ctx;
+    ngx_http_complex_value_t   cv;
+
+    r = ngx_http_lua_get_request(L);
+
+    n = lua_gettop(L);
+    if (n < 1) {
+        return luaL_error(L, "too few arguments");
+    }
+
+    status = luaL_checkinteger(L, 1);
+
+    if (status < 0 || status > 999) {
+        return luaL_error(L, "code is out of range");
+    }
+
+    if (n < 2) {
+        text.data = NULL;
+        text.len = 0;
+
+    } else {
+        text.data = (u_char *) luaL_checklstring(L, 2, &text.len);
+    }
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
+
+    if (status < NGX_HTTP_BAD_REQUEST || text.len) {
+        ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
+
+        cv.value.data = text.data;
+        cv.value.len = text.len;
+
+        ctx->status = ngx_http_send_response(r, status, NULL, &cv);
+
+        if (ctx->status == NGX_ERROR) {
+            return luaL_error(L, "failed to send response");
+        }
+
+    } else {
+        ctx->status = status;
+    }
+
+    return 0;
+}
+
+
+static int
+ngx_http_lua_log(lua_State *L)
+{
+    int                        n, level;
+    ngx_str_t                  msg;
+    ngx_connection_t          *c;
+    ngx_http_request_t        *r;
+
+    r = ngx_http_lua_get_request(L);
+    c = r->connection;
+
+    n = lua_gettop(L);
+    if (n != 2) {
+        return luaL_error(L, "invalid arguments");
+    }
+
+    level = luaL_checkinteger(L, 1);
+    if (level < NGX_LOG_STDERR || level > NGX_LOG_DEBUG) {
+        return luaL_error(L, "invalid level");
+    }
+
+    msg.data = (u_char *) luaL_checklstring(L, 2, &msg.len);
+
+    ngx_log_error((ngx_uint_t) level, c->log, 0, "lua: %*s", msg.len, msg.data);
 
     return 0;
 }

@@ -13,6 +13,7 @@ ngx_module_deps="$lua/src/liblua.a \
 
 ngx_module_srcs="$ngx_addon_dir/src/ngx_http_lua.c \
                  $ngx_addon_dir/src/ngx_http_lua_module.c \
-                 $ngx_addon_dir/src/ngx_http_lua_meta.c"
+                 $ngx_addon_dir/src/ngx_http_lua_request.c \
+                 $ngx_addon_dir/src/ngx_lua.c"
 
 . auto/module

@@ -31,11 +31,8 @@ ngx_http_lua_init_state(ngx_conf_t *cf, ngx_http_lua_main_conf_t *lmcf)
 
     luaL_openlibs(L);
 
-    lua_createtable(L, 0, 100);
-
-    ngx_http_lua_register_meta(L);
-
-    lua_setglobal(L, "_ngx");
+    ngx_http_lua_register_request(L);
+    ngx_http_lua_register_global(L);
 
     cln = ngx_pool_cleanup_add(cf->pool, 0);
     if (cln == NULL) {
@@ -252,7 +249,7 @@ ngx_http_lua_resume(ngx_http_request_t *r, ngx_str_t *name, ngx_event_t *wake)
         }
     }
 
-    lua_getglobal(L, "_ngx");
+    lua_getglobal(L, "_request");
 
     status = lua_resume(L, NULL, 1, &nresults);
 
@@ -295,7 +292,7 @@ ngx_http_lua_eval(ngx_http_request_t *r, ngx_str_t *name, ngx_str_t *result)
     wake = ctx->wake;
     ctx->wake = NULL;
 
-    lua_getglobal(L, "_ngx");
+    lua_getglobal(L, "_request");
 
     status = lua_pcall(L, 1, 1, 0);
 

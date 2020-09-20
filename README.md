@@ -24,7 +24,7 @@ Directives
 - ``lua_content`` (http|server|location)
 - ``lua_header_filter`` (http|server|location)
 
-HTTP Request
+request object
 ====
 - ``r.method`` the client HTTP request method, readonly.
 - ``r.uri`` the client HTTP request uri, readonly.
@@ -34,13 +34,23 @@ HTTP Request
 - ``r.arg{}`` the client HTTP request args, readonly.
 - ``r.request_body`` the client HTTP request body.
 - ``r.var{}``
-- ``r.log(msg)``
-- ``r.warn(msg)``
-- ``r.error(msg)``
+- ``r.log(level, msg)``
 - ``r.header_in(name)`` the client HTTP request header, readonly.
 - ``r.header_out(name[, value])`` the client HTTP response header.
 - ``r.read_body()`` call this first while use r.request_body before content phase. 
 - ``r.exit(status, desc``)
+
+ngx object
+==========
+Log error levels  
+- ngx.LOG_EMERG
+- ngx.LOG_ALERT
+- ngx.LOG_CRIT
+- ngx.LOG_ERR
+- ngx.LOG_WARN
+- ngx.LOG_NOTICE
+- ngx.LOG_INFO
+- ngx.LOG_DEBUG
 
 
 Example
@@ -85,6 +95,7 @@ end
 
 
 function access1(r)
+    r.log(ngx.LOG_ERR, "access")
     r.read_body();
     local body = r.request_body;
 end
