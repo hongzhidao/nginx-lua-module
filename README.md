@@ -1,19 +1,19 @@
-# nginx-http-lua-module
+# nginx-lua-module
 The module allows using lua in nginx. 
 
 Compatibility
 =============
 
-- nginx version >= 1.14+
-- lua version >= 5.3+
-- tested on Linux
+- NGINX 1.16.0+
+- Lua 5.3.0+
+- Linux
 
 Build
 =====
 
 Configuring nginx with the module.
 
-    $ ./configure --add-module=/path/to/nginx-http-lua-module
+    $ ./configure --add-module=/path/to/nginx-lua-module
     
 Directives
 ==========
@@ -26,19 +26,23 @@ Directives
 
 request object
 ====
-- ``r.method`` the client HTTP request method, readonly.
 - ``r.uri`` the client HTTP request uri, readonly.
+- ``r.host`` the same to the variable $host.
+- ``r.method`` the client HTTP request method, readonly.
 - ``r.http_version`` the client HTTP request version, readonly.
 - ``r.remote_addr`` the client ip, readonly.
-- ``r.status`` the client HTTP response status, readonly.
-- ``r.arg{}`` the client HTTP request args, readonly.
 - ``r.request_body`` the client HTTP request body.
-- ``r.var{}``
+- ``r.status`` the client HTTP response status, read|write.
+- ``r.args{}`` the client HTTP request args, readonly.
+- ``r.vars{}`` read|write.
 - ``r.log(level, msg)``
-- ``r.header_in(name)`` the client HTTP request header, readonly.
-- ``r.header_out(name[, value])`` the client HTTP response header.
-- ``r.read_body()`` call this first while use r.request_body before content phase. 
-- ``r.exit(status, desc``)
+- ``r.req_headers`` the client HTTP request headers.
+- ``r.req_headers.get(name)``
+- ``r.res_headers`` the client HTTP response headers.
+- ``r.res_headers.get(name)``
+- ``r.res_headers.set(name, string|array)``
+- ``r.response(text, { status = status, headers = {name = string|array, ...}})``
+- ``r.exit(status)``
 
 ngx object
 ==========
@@ -51,6 +55,7 @@ Log error levels
 - ``ngx.LOG_NOTICE``
 - ``ngx.LOG_INFO``
 - ``ngx.LOG_DEBUG``
+- ``ngx.log(level, msg)``
 
 
 Example
@@ -62,15 +67,24 @@ events {}
 
 http {
     lua_include  http.lua;
-    lua_set $foo  foo;
-    lua_header_filter  header_filter;
+    lua_set  $foo foo;
 
     server {
         listen 8000;
 
+        lua_header_filter  header_filter;
+
         location / {
-            lua_access  access1;
-            lua_content  content1;
+            lua_access   http_access;
+            lua_content  http_content;
+        }
+
+        location /hello {
+            lua_content  hello;
+        }
+
+        location /remote_addr {
+            return  200 $foo;
         }
     }
 }
@@ -83,51 +97,55 @@ package.cpath = package.cpath .. ";/usr/local/nginx/lua/?.so;";
 
 
 function foo(r)
-    return "This is a variable";
+    return "remote addr=" .. r.remote_addr
+end
+
+
+function hello(r)
+    r.response("hello lua.")
+end
+
+
+function http_access(r)
+    if (r.remote_addr == '1.1.1.1') then
+        r.exit(403)
+    end
+end
+
+
+function http_content(r)
+    local #nargs = #r.args
+    local headers = r.req_headers
+    local body = r.request_body or "blah";
+
+    local html = "<html><head><title>nginx lua module</title></head><body>";
+    local content = "args: " .. narg .. "<br>"
+                    .. "uri: " .. r.uri .. "<br>"
+                    .. "header: " .. headers.get('Accept-Language') .. "<br>"
+                    .. "body: " .. body .. "<br>"
+                    .. "var: " .. r.vars.foo .. "<br>";
+    html = html .. content .. "</body></html>";
+
+    local headers = r.res_headers
+    headers['Content-Type'] = 'text/html'
+
+    r.response(html, {
+        status = 200,
+        headers = headers
+    });
 end
 
 
 function header_filter(r)
-    r.header_out('X-Test', "test test test");
-end
-
-
-function access1(r)
-    r.log(ngx.LOG_ERR, "access")
-    r.read_body();
-    local body = r.request_body;
-end
-
-
-function content1(r)
-    local arg = r.arg.x or "arg x";
-    local uri = r.uri;
-    local hi = r.header_in("Accept-Language") or "header accept language";
-    local body = r.request_body or "body";
-
-    local var = r.var.foo;
-
-    local html = "<html><head><title>nginx lua module</title></head><body>";
-
-    local content = "arg: " .. arg .. "<br>"
-                    .. "uri: " .. uri .. "<br>"
-                    .. "header: " .. hi .. "<br>"
-                    .. "body: " .. body .. "<br>"
-                    .. "var: " .. var .. "<br>";
-
-    html = html .. content .. "</body></html>";
-
-    r.header_out("Content-Type", "text/html");
-
-    r.exit(200, html);
+    r.status = 204
 end
 ```
 
 Community
 =========
-Author: Jedo Hong  
+Author: 洪志道
 Contact: hongzhidao@gmail.com  
-Feedbacks are welcome. Enjoy it.
+Feedbacks are welcome. Have fun :)
 
 Inspired From
 -------------

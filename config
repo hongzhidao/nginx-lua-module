@@ -9,11 +9,9 @@ ngx_module_incs="$lua/src $ngx_addon_dir/src"
 ngx_module_libs="$lua/src/liblua.a -lm -ldl"
 
 ngx_module_deps="$lua/src/liblua.a \
-                 $ngx_addon_dir/src/ngx_http_lua.h"
+                 $ngx_addon_dir/src/ngx_lua.h"
 
-ngx_module_srcs="$ngx_addon_dir/src/ngx_http_lua.c \
-                 $ngx_addon_dir/src/ngx_http_lua_module.c \
-                 $ngx_addon_dir/src/ngx_http_lua_request.c \
-                 $ngx_addon_dir/src/ngx_lua.c"
+ngx_module_srcs="$ngx_addon_dir/src/ngx_lua.c \
+                 $ngx_addon_dir/src/ngx_http_lua_module.c"
 
 . auto/module
