@@ -6,10 +6,17 @@
 #include <ngx_lua.h>
 
 
+typedef struct {
+    int                  handler;
+    ngx_lua_ctx_t       *lua;
+} ngx_lua_timer_t;
+
+
 static void ngx_lua_log_register(lua_State *L);
 static int ngx_lua_log(lua_State *L);
 static int ngx_lua_base64_encode(lua_State *L);
 static int ngx_lua_base64_decode(lua_State *L);
+static int ngx_lua_timer(lua_State *L);
 
 
 ngx_lua_ctx_t *
@@ -166,6 +173,9 @@ ngx_lua_core_register(lua_State *L)
     lua_pushcfunction(L, ngx_lua_base64_decode);
     lua_setfield(L, -2, "base64_decode");
 
+    lua_pushcfunction(L, ngx_lua_timer);
+    lua_setfield(L, -2, "timer");
+
     ngx_lua_crypto_register(L);
 
     lua_setglobal(L, "ngx");
@@ -277,4 +287,76 @@ ngx_lua_base64_decode(lua_State *L)
     lua_pushlstring(L, (const char *) dst.data, dst.len);
 
     return 1;
+}
+
+
+static void
+ngx_lua_timer_handler(ngx_event_t *ev)
+{
+    ngx_int_t         rc;
+    lua_State        *L;
+    ngx_lua_ctx_t    *lua;
+    ngx_lua_timer_t  *timer;
+
+    timer = ev->data;
+    lua = timer->lua;
+    L = lua->state;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+                   "lua timer() event handler");
+
+    if (lua->wake == NULL) {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, timer->handler);
+        lua_pushvalue(L, 1);
+        luaL_unref(L, LUA_REGISTRYINDEX, timer->handler);
+    }
+
+    rc = ngx_lua_call(lua, ev);
+
+    if (rc == NGX_OK) {
+        ngx_lua_destroy(lua);
+    }
+}
+
+
+static int
+ngx_lua_timer(lua_State *L)
+{
+    int               timeout;
+    ngx_event_t      *e;
+    ngx_lua_ctx_t    *lua;
+    ngx_lua_timer_t  *timer;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_CORE, lua->log, 0, "lua timer()");
+
+    lua = ngx_lua_get_ext(L);
+
+    timeout = luaL_checkinteger(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+
+    lua = ngx_lua_create(lua->main, lua->log);
+    if (lua == NULL) {
+        return 0;
+    }
+
+    e = ngx_pcalloc(lua->pool, sizeof(ngx_event_t));
+    if (e == NULL) {
+        return 0;
+    }
+
+    timer = ngx_pcalloc(lua->pool, sizeof(ngx_lua_timer_t));
+    if (timer == NULL) {
+        return 0;
+    }
+
+    timer->lua = lua;
+    timer->handler = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    e->data = timer;
+    e->handler = ngx_lua_timer_handler;
+    e->log = ngx_cycle->log;
+
+    ngx_add_timer(e, timeout);
+
+    return 0;
 }
