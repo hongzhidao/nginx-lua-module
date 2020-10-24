@@ -8,6 +8,8 @@
 
 static void ngx_lua_log_register(lua_State *L);
 static int ngx_lua_log(lua_State *L);
+static int ngx_lua_base64_encode(lua_State *L);
+static int ngx_lua_base64_decode(lua_State *L);
 
 
 ngx_lua_ctx_t *
@@ -158,6 +160,14 @@ ngx_lua_core_register(lua_State *L)
 
     ngx_lua_log_register(L);
 
+    lua_pushcfunction(L, ngx_lua_base64_encode);
+    lua_setfield(L, -2, "base64_encode");
+
+    lua_pushcfunction(L, ngx_lua_base64_decode);
+    lua_setfield(L, -2, "base64_decode");
+
+    ngx_lua_crypto_register(L);
+
     lua_setglobal(L, "ngx");
 }
 
@@ -219,4 +229,52 @@ ngx_lua_log(lua_State *L)
                   "lua: %*s", msg.len, msg.data);
 
     return 0;
+}
+
+
+static int
+ngx_lua_base64_encode(lua_State *L)
+{
+    ngx_str_t       src, dst;
+    ngx_lua_ctx_t  *lua;
+    lua = ngx_lua_get_ext(L);
+
+    src.data = (u_char *) luaL_checklstring(L, 1, &src.len);
+
+    dst.len = ngx_base64_encoded_length(src.len);
+    dst.data = ngx_pcalloc(lua->pool, dst.len);
+
+    if (dst.data == NULL) {
+        return 0;
+    }
+
+    ngx_encode_base64(&dst, &src);
+
+    lua_pushlstring(L, (const char *) dst.data, dst.len);
+
+    return 1;
+}
+
+
+static int
+ngx_lua_base64_decode(lua_State *L)
+{
+    ngx_str_t       src, dst;
+    ngx_lua_ctx_t  *lua;
+    lua = ngx_lua_get_ext(L);
+
+    src.data = (u_char *) luaL_checklstring(L, 1, &src.len);
+
+    dst.len = ngx_base64_decoded_length(src.len);
+    dst.data = ngx_pcalloc(lua->pool, dst.len);
+
+    if (dst.data == NULL) {
+        return 0;
+    }
+
+    ngx_decode_base64(&dst, &src);
+
+    lua_pushlstring(L, (const char *) dst.data, dst.len);
+
+    return 1;
 }

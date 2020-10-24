@@ -33,6 +33,7 @@ ngx_int_t ngx_lua_call(ngx_lua_ctx_t *lua, ngx_event_t *wake);
 int ngx_lua_yield(ngx_lua_ctx_t *lua);
 void ngx_lua_wakeup(ngx_lua_ctx_t *lua);
 void ngx_lua_core_register(lua_State *L);
+void ngx_lua_crypto_register(lua_State *L);
 
 
 #define ngx_lua_get_ext(L)                                          \

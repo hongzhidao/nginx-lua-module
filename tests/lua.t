@@ -133,6 +133,12 @@ http {
             lua_content content_encoding;
         }
 
+        location /ctx {
+            lua_access  ctx_access;
+            lua_content ctx_content;
+            lua_header_filter  ctx_header_filter;
+        }
+
         location /empty {
             lua_content empty;
         }
@@ -264,6 +270,23 @@ function content_encoding(r)
     r.response(hdr)
 end
 
+function ctx_access(r)
+    r.ctx.foo = {'a', 'b', 'c'}
+end
+
+function ctx_content(r)
+    r.ctx.header = { name = 'Foo', value = 'blah' }
+    local s = 'foo'
+    for _, v in ipairs(r.ctx.foo) do
+        s = s .. ',' .. v
+    end
+    r.response(s)
+end
+
+function ctx_header_filter(r)
+    r.res_headers.set(r.ctx.header.name, r.ctx.header.value)
+end
+
 function response(r)
     r.response("hello", {
         status = 403,
@@ -288,7 +311,7 @@ end
 
 EOF
 
-$t->try_run('no lua available')->plan(25);
+$t->try_run('no lua available')->plan(26);
 
 ###############################################################################
 
@@ -316,6 +339,7 @@ like(http_get('/content_type'), qr/text\/xml; charset=\"utf-8\"/,
               'r.res_headers Content-Type');
 like(http_get('/content_encoding'), qr/gzip/,
               'r.res_headers Content-Encoding');
+like(http_get('/ctx'), qr/Foo: blah.*foo,a,b,c/ms, 'r.ctx');
 like(http_get('/response'), qr/hello/, 'r.response');
 like(http_get('/empty'), qr/500 Internal Server Error/, 'empty');
 like(http_get('/not_found'), qr/404 Not Found/, 'not found');

@@ -810,6 +810,11 @@ ngx_lua_http_register(lua_State *L)
 
     lua_createtable(L, 0, 100);
 
+    /* ctx { */
+    lua_createtable(L, 0, 4);
+    lua_setfield(L, -2, "ctx");
+    /* } ctx */
+
     /* vars { */
     lua_newtable(L);
     lua_createtable(L, 0, 4);

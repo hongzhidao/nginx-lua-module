@@ -1,5 +1,5 @@
 # nginx-lua-module
-The module allows using lua in nginx. 
+Embedded offical Lua language into NGINX.
 
 Compatibility
 =============
@@ -110,26 +110,30 @@ function http_access(r)
     if (r.remote_addr == '1.1.1.1') then
         r.exit(403)
     end
+
+    r.ctx.foo = 'blah'
 end
 
 
 function http_content(r)
-    local #nargs = #r.args
-    local headers = r.req_headers
+    local nargs = #r.args
+    local req_headers = r.req_headers
     local body = r.request_body or "blah";
 
-    local html = "<html><head><title>nginx lua module</title></head><body>";
-    local content = "args: " .. narg .. "<br>"
+    local text = "<html><head><title>nginx lua module</title></head><body>";
+    local content = "args: " .. nargs .. "<br>"
                     .. "uri: " .. r.uri .. "<br>"
-                    .. "header: " .. headers.get('Accept-Language') .. "<br>"
+                    .. "host: " .. req_headers.get('Host') .. "<br>"
                     .. "body: " .. body .. "<br>"
-                    .. "var: " .. r.vars.foo .. "<br>";
-    html = html .. content .. "</body></html>";
+                    .. "var: " .. r.vars.remote_addr .. "<br>"
+                    .. "foo: " .. r.ctx.foo .. "<br>"
+    text = text .. content .. "</body></html>";
 
-    local headers = r.res_headers
-    headers['Content-Type'] = 'text/html'
+    local headers = {
+        ["Content-Type"] = 'text/html'
+    }
 
-    r.response(html, {
+    r.response(text, {
         status = 200,
         headers = headers
     });
