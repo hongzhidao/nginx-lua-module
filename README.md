@@ -46,7 +46,7 @@ request object
 
 ngx object
 ==========
-Log error levels  
+Log
 - ``ngx.LOG_EMERG``
 - ``ngx.LOG_ALERT``
 - ``ngx.LOG_CRIT``
@@ -56,6 +56,16 @@ Log error levels
 - ``ngx.LOG_INFO``
 - ``ngx.LOG_DEBUG``
 - ``ngx.log(level, msg)``
+
+timer
+- ``ngx.timer(timeout, func)``
+
+crypto
+- ``ngx.base64_encode(str)``
+- ``ngx.base64_decode(str)``
+- ``ngx.hmac.new('sha256', key)``
+- ``ngx.hmac.update(data)``
+- ``ngx.hmac.digest('hex')``
 
 
 Example

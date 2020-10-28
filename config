@@ -10,9 +10,13 @@ ngx_module_libs="$lua/src/liblua.a -lm -ldl"
 
 ngx_module_deps="$lua/src/liblua.a \
                  $ngx_addon_dir/src/ngx_sha2.h \
+                 $ngx_addon_dir/src/ngx_unit.h \
+                 $ngx_addon_dir/src/ngx_mp.h \
                  $ngx_addon_dir/src/ngx_lua.h"
 
 ngx_module_srcs="$ngx_addon_dir/src/ngx_sha2.c \
+                 $ngx_addon_dir/src/ngx_unit.c \
+                 $ngx_addon_dir/src/ngx_mp.c \
                  $ngx_addon_dir/src/ngx_lua.c \
                  $ngx_addon_dir/src/ngx_lua_crypto.c \
                  $ngx_addon_dir/src/ngx_http_lua_module.c"
